@@ -1,10 +1,16 @@
-# quickterm
+# quickterm &emsp; [![Version Badge]][crates.io] [![License Badge]][license]
 
 A small drop-down terminal for Sway/i3 IPC. Rust port of [`i3-quickterm`](https://github.com/lbonn/i3-quickterm).
 
 ## Installation
 
-Build and install with Cargo:
+Install from crates.io with Cargo:
+
+```bash
+cargo install quickterm
+```
+
+For local development:
 
 ```bash
 cargo install --path .
@@ -61,3 +67,8 @@ Defaults:
 ## License
 
 MIT
+
+[Version Badge]: https://img.shields.io/crates/v/quickterm.svg
+[crates.io]: https://crates.io/crates/quickterm
+[License Badge]: https://img.shields.io/crates/l/quickterm.svg
+[license]: https://github.com/ram02z/quickterm/blob/master/LICENSE
