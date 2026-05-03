@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
-use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::config::Config;
 use crate::error::QuicktermError;
@@ -9,7 +9,7 @@ use crate::expand::{env_map, expand_command, expand_string};
 use crate::history::{LockedHistoryFile, reorder_shells, validate_history};
 use crate::ipc::{Ipc, MARK_QT_PATTERN, mark_for_shell};
 use crate::menu::run_menu;
-use crate::terminal::{build_terminal_command, term_title};
+use crate::terminal::build_terminal_command;
 
 pub fn run(config: Config, shell: Option<String>, in_place: bool) -> Result<(), QuicktermError> {
     match (shell, in_place) {
@@ -58,17 +58,25 @@ pub fn toggle_quickterm(config: &Config, shell: &str) -> Result<(), QuicktermErr
     let nodes = ipc.find_marked_exact(&mark)?;
 
     if nodes.is_empty() {
+        let startup_title = startup_title(shell);
         let argv0 = std::env::args()
             .next()
             .unwrap_or_else(|| "quickterm".to_string());
         let reentry_argv = vec![argv0, "--in-place".to_string(), shell.to_string()];
-        let terminal_argv =
-            build_terminal_command(&config.term, &term_title(shell), &reentry_argv)?;
+        let terminal_argv = build_terminal_command(&config.term, &startup_title, &reentry_argv)?;
 
-        let err = Command::new(&terminal_argv[0])
+        Command::new(&terminal_argv[0])
             .args(&terminal_argv[1..])
-            .exec();
-        return Err(QuicktermError::Io(err));
+            .spawn()?;
+
+        if let Some(node_id) = wait_for_titled_window(&mut ipc, &startup_title)? {
+            let selector = format!("[con_id={node_id}]");
+            ipc.command(&format!("{selector} mark {mark}"))?;
+            ipc.move_back(&selector)?;
+            ipc.pop_it(&mark, &config.pos, config.ratio)?;
+        }
+
+        return Ok(());
     }
 
     let node = &nodes[0];
@@ -88,14 +96,8 @@ pub fn launch_in_place(config: &Config, shell: &str) -> Result<(), QuicktermErro
         .get(shell)
         .ok_or_else(|| QuicktermError::UnknownShell(shell.to_string()))?;
 
-    let mark = mark_for_shell(shell);
-    let mut ipc = Ipc::connect()?;
-    ipc.command(&format!("mark {mark}"))?;
-    ipc.move_back(&format!("[con_mark={mark}]"))?;
-    ipc.pop_it(&mark, &config.pos, config.ratio)?;
-
     let argv = expand_command(command, &env_map())?;
-    let err = Command::new(&argv[0]).args(&argv[1..]).exec();
+    let err = std::os::unix::process::CommandExt::exec(Command::new(&argv[0]).args(&argv[1..]));
     Err(QuicktermError::Io(err))
 }
 
@@ -130,4 +132,28 @@ fn load_ordered_shells(
         Some(order) => validate_history(&order, &known).unwrap_or(sorted),
         None => sorted,
     })
+}
+
+fn wait_for_titled_window(ipc: &mut Ipc, title: &str) -> Result<Option<i64>, QuicktermError> {
+    for _ in 0..50 {
+        if let Some(node) = ipc
+            .find_titled_in_current_workspace(title)?
+            .into_iter()
+            .next()
+        {
+            return Ok(Some(node.id));
+        }
+
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    Ok(None)
+}
+
+fn startup_title(shell: &str) -> String {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    format!("__quickterm__{shell}__{nonce}__")
 }
