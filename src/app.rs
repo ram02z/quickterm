@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::config::Config;
+use crate::config::{Config, DEFAULT_HISTORY_PATH, LEGACY_HISTORY_PATH};
 use crate::error::QuicktermError;
 use crate::expand::{env_map, expand_command, expand_string};
 use crate::history::{LockedHistoryFile, reorder_shells, validate_history};
@@ -105,7 +105,16 @@ fn history_path(config: &Config) -> Result<Option<PathBuf>, QuicktermError> {
     match &config.history {
         Some(path) => {
             let expanded = expand_string(path, &env_map())?;
-            Ok(Some(PathBuf::from(expanded)))
+            let path = PathBuf::from(expanded);
+
+            if path == PathBuf::from(expand_string(DEFAULT_HISTORY_PATH, &env_map())?) {
+                let legacy = PathBuf::from(expand_string(LEGACY_HISTORY_PATH, &env_map())?);
+                if !path.exists() && legacy.exists() {
+                    return Ok(Some(legacy));
+                }
+            }
+
+            Ok(Some(path))
         }
         None => Ok(None),
     }

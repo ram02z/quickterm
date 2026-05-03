@@ -6,6 +6,11 @@ use serde::Deserialize;
 
 use crate::error::QuicktermError;
 
+pub const CONFIG_FILE_NAME: &str = "quickterm.json";
+pub const LEGACY_CONFIG_FILE_NAME: &str = "i3-quickterm.json";
+pub const DEFAULT_HISTORY_PATH: &str = "{$HOME}/.cache/quickterm.order";
+pub const LEGACY_HISTORY_PATH: &str = "{$HOME}/.cache/i3-quickterm.order";
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Position {
@@ -44,7 +49,7 @@ pub fn default_config() -> Config {
     Config {
         menu: "rofi -dmenu -p 'quickterm: ' -no-custom -auto-select".to_string(),
         term: "urxvt".to_string(),
-        history: Some("{$HOME}/.cache/i3-quickterm.order".to_string()),
+        history: Some(DEFAULT_HISTORY_PATH.to_string()),
         ratio: 0.25,
         pos: Position::Top,
         shells,
@@ -53,8 +58,15 @@ pub fn default_config() -> Config {
 
 pub fn config_path_for(home: &str, xdg_config_dir: Option<&str>) -> String {
     match xdg_config_dir {
-        Some(dir) => format!("{dir}/i3-quickterm.json"),
-        None => format!("{home}/.config/i3-quickterm.json"),
+        Some(dir) => format!("{dir}/{CONFIG_FILE_NAME}"),
+        None => format!("{home}/.config/{CONFIG_FILE_NAME}"),
+    }
+}
+
+pub fn legacy_config_path_for(home: &str, xdg_config_dir: Option<&str>) -> String {
+    match xdg_config_dir {
+        Some(dir) => format!("{dir}/{LEGACY_CONFIG_FILE_NAME}"),
+        None => format!("{home}/.config/{LEGACY_CONFIG_FILE_NAME}"),
     }
 }
 
@@ -62,7 +74,17 @@ pub fn config_path_from_env() -> Result<PathBuf, QuicktermError> {
     let home = std::env::var("HOME")
         .map_err(|_| QuicktermError::InvalidConfig("HOME is not set".to_string()))?;
     let xdg = std::env::var("XDG_CONFIG_DIR").ok();
-    Ok(PathBuf::from(config_path_for(&home, xdg.as_deref())))
+    let preferred = PathBuf::from(config_path_for(&home, xdg.as_deref()));
+    if preferred.exists() {
+        return Ok(preferred);
+    }
+
+    let legacy = PathBuf::from(legacy_config_path_for(&home, xdg.as_deref()));
+    if legacy.exists() {
+        return Ok(legacy);
+    }
+
+    Ok(preferred)
 }
 
 pub fn load_config() -> Result<Config, QuicktermError> {

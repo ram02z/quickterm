@@ -35,10 +35,10 @@ bindsym $mod+b exec quickterm shell
 
 ## Configuration
 
-`quickterm` reads `i3-quickterm.json` from:
+`quickterm` reads `quickterm.json` from:
 
-- `$XDG_CONFIG_DIR/i3-quickterm.json`, if `XDG_CONFIG_DIR` is set
-- `~/.config/i3-quickterm.json`, otherwise
+- `$XDG_CONFIG_DIR/quickterm.json`, if `XDG_CONFIG_DIR` is set
+- `~/.config/quickterm.json`, otherwise
 
 Defaults:
 
@@ -46,7 +46,7 @@ Defaults:
 {
   "menu": "rofi -dmenu -p 'quickterm: ' -no-custom -auto-select",
   "term": "urxvt",
-  "history": "{$HOME}/.cache/i3-quickterm.order",
+  "history": "{$HOME}/.cache/quickterm.order",
   "ratio": 0.25,
   "pos": "top",
   "shells": {
